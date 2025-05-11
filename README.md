@@ -19,4 +19,4 @@ The dashboard was created to help the foundation track patient assistance applic
   4. The dashboard then automatically updates.
 
 # Author
-# Created by [Deveshi Jakhar] - UNO, 2025.
+Created by [Deveshi Jakhar] - UNO, 2025.
