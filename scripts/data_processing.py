@@ -11,8 +11,8 @@ def clean_data():
     # --- Standardizing column names ---
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('(', '').str.replace(')', '')
 
-    # --- Renaming for clarity ---
-    df.rename(columns={
+    # --- Renaming for clarity (only if columns exist) ---
+    rename_map = {
         'grant_req_date': 'request_date',
         'application_signed?': 'application_signed',
         'request_status': 'status',
@@ -20,42 +20,60 @@ def clean_data():
         'type_of_assistance_class': 'assistance_type',
         'amount': 'amount_granted',
         'dob': 'date_of_birth'
-    }, inplace=True)
+    }
+    df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
-    # --- Dropping completely empty rows ---
+    # --- Droping completely empty rows ---
     df.dropna(how='all', inplace=True)
 
     # --- Filling in missing data in key flags ---
-    df['application_signed'] = df['application_signed'].fillna('Missing')
-    df['status'] = df['status'].fillna('Unknown')
+    if 'application_signed' in df.columns:
+        df['application_signed'] = df['application_signed'].fillna('Missing')
+    else:
+        df['application_signed'] = 'Missing'  # create default column
+    
+    if 'status' in df.columns:
+        df['status'] = df['status'].fillna('Unknown')
+    else:
+        df['status'] = 'Unknown'
 
     # --- Converting dates ---
-    df['request_date'] = pd.to_datetime(df['request_date'], errors='coerce')
-    df['date_of_birth'] = pd.to_datetime(df['date_of_birth'], errors='coerce')
+    if 'request_date' in df.columns:
+        df['request_date'] = pd.to_datetime(df['request_date'], errors='coerce')
+    if 'date_of_birth' in df.columns:
+        df['date_of_birth'] = pd.to_datetime(df['date_of_birth'], errors='coerce')
 
     # --- Calculating patient age ---
     today = pd.to_datetime('today')
-    df['age'] = df['date_of_birth'].apply(lambda dob: today.year - dob.year if pd.notnull(dob) else None)
+    if 'date_of_birth' in df.columns:
+        df['age'] = df['date_of_birth'].apply(lambda dob: today.year - dob.year if pd.notnull(dob) else None)
 
     # --- Demographic cleaning ---
-    df['gender'] = df['gender'].str.strip().str.capitalize()
-    df['insurance_type'] = df['insurance_type'].str.strip().str.title()
+    if 'gender' in df.columns:
+        df['gender'] = df['gender'].str.strip().str.capitalize()
+    if 'insurance_type' in df.columns:
+        df['insurance_type'] = df['insurance_type'].str.strip().str.title()
 
     # --- Calculating unused grant flag ---
-    df['amount_granted'] = pd.to_numeric(df['amount_granted'], errors='coerce')
-    df['remaining_balance'] = pd.to_numeric(df['remaining_balance'], errors='coerce')
-    df['amount_used'] = df['amount_granted'] - df['remaining_balance']
-    df['full_grant_used'] = df['remaining_balance'] <= 0
+    if 'amount_granted' in df.columns:
+        df['amount_granted'] = pd.to_numeric(df['amount_granted'], errors='coerce')
+    if 'remaining_balance' in df.columns:
+        df['remaining_balance'] = pd.to_numeric(df['remaining_balance'], errors='coerce')
+        df['amount_used'] = df['amount_granted'] - df['remaining_balance']
+        df['full_grant_used'] = df['remaining_balance'] <= 0
 
     # --- Income brackets for dashboard filters ---
-    df['income_bracket'] = pd.cut(df['monthly_income'], bins=[0, 2000, 4000, 6000, 10000, 100000],
-                                  labels=['<2k', '2–4k', '4–6k', '6–10k', '10k+'])
+    if 'monthly_income' in df.columns:
+        df['income_bracket'] = pd.cut(df['monthly_income'], bins=[0, 2000, 4000, 6000, 10000, 100000],
+                                      labels=['<2k', '2–4k', '4–6k', '6–10k', '10k+'])
 
     # --- Adding review-ready flag ---
-    df['ready_for_review'] = (df['status'].str.lower() == 'approved')
+    if 'status' in df.columns:
+        df['ready_for_review'] = (df['status'].str.lower() == 'approved')
 
     # --- Cleaning application_signed flag for filter use ---
-    df['signed_by_committee'] = df['application_signed'].str.lower().isin(['yes', 'signed'])
+    if 'application_signed' in df.columns:
+        df['signed_by_committee'] = df['application_signed'].str.lower().isin(['yes', 'signed'])
 
     # --- Saving processed data ---
     os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
