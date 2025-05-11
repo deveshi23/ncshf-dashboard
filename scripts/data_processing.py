@@ -22,7 +22,7 @@ def clean_data():
         'dob': 'date_of_birth'
     }, inplace=True)
 
-    # --- Droping completely empty rows ---
+    # --- Dropping completely empty rows ---
     df.dropna(how='all', inplace=True)
 
     # --- Filling in missing data in key flags ---
@@ -58,8 +58,10 @@ def clean_data():
     df['signed_by_committee'] = df['application_signed'].str.lower().isin(['yes', 'signed'])
 
     # --- Saving processed data ---
+    os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
     df.to_csv(PROCESSED_DATA_PATH, index=False)
     print("Data has been cleaned and saved to:", PROCESSED_DATA_PATH)
 
-if __name__ == "__main__":
+# --- Automatically run cleaning if processed file is missing ---
+if not os.path.exists(PROCESSED_DATA_PATH):
     clean_data()
