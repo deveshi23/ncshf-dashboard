@@ -24,7 +24,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run data processing script
-        run: python scripts/data_processing.py
+        working-directory: ./scripts
+        run: python data_processing.py
 
       - name: Commit and Push Changes
         run: |
