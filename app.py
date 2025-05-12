@@ -19,8 +19,8 @@ def load_data():
 df = load_data()
 
 # Always show available columns for debugging
-st.sidebar.markdown("### Data Columns Available")
-st.sidebar.write(df.columns.tolist())
+#st.sidebar.markdown("### Data Columns Available")
+#st.sidebar.write(df.columns.tolist())
 
 def show_review_page():
     st.title("📋 Applications Ready for Review")
