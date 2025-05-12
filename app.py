@@ -114,7 +114,7 @@ if "appended_rows" not in st.session_state:
     st.session_state.appended_rows = []
 
 if "page" not in st.session_state:
-    st.session_state.page = "Home Page"
+    st.session_state.page = "Landing Page"
 
 df_original = load_data()
 
@@ -486,7 +486,7 @@ def show_impact_summary_page():
 
 # --- Navigation ---
 pages = {
-    "Main Page": landing_page,
+    "Landing Page": landing_page,
     "Upload Your Data": handle_file_upload,
     "Add New Row": handle_append_row,
     "Applications Ready for Review": show_review_page,
