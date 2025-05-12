@@ -1,219 +1,236 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 @st.cache_data
 def load_data():
     try:
         df = pd.read_csv("data/processed/processed_data.csv")
         df.columns = df.columns.str.strip()
-        
-        # Verify we have required columns
-        expected_columns = ['Amount', 'Type of Assistance', 'Request Status']
-        for col in expected_columns:
-            if col not in df.columns:
-                st.error(f"Required column '{col}' not found in data")
-                
         return df
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        return pd.DataFrame()  # Return empty dataframe to prevent crashes
+        return pd.DataFrame()
 
 df = load_data()
-df.columns = df.columns.str.strip()  # Clean any whitespace in column names
 
+# Debugging - show available columns
+if st.sidebar.checkbox("Show debug info"):
+    st.sidebar.write("Available columns:", df.columns.tolist())
+    st.sidebar.write("Sample data:", df.head())
 
 def show_review_page():
     st.title("📋 Applications Ready for Review")
     
-    # First check if the column exists
-    if 'Request Status' not in df.columns:
-        st.error(f"'Request Status' column not found. Available columns: {df.columns.tolist()}")
+    # Find status column (adapt to your actual column names)
+    status_col = next((col for col in ['ready_for_review', 'status', 'Request Status'] 
+                      if col in df.columns), None)
+    
+    if not status_col:
+        st.error("No status column found in data")
         return
     
-    # Filter for ready for review applications
-    ready_df = df[df['Request Status'] == 'Ready for Review']  
+    # Filter ready for review applications
+    if 'ready_for_review' in df.columns:
+        ready_df = df[df['ready_for_review'] == True]
+    else:
+        ready_df = df[df[status_col].str.contains('review|ready', case=False, na=False)]
+    
+    if len(ready_df) == 0:
+        st.warning("No applications ready for review found")
+        return
 
-    signed_filter = st.selectbox(
-        "Filter by Committee Signature:",
-        ["All", "Signed", "Unsigned"]
-    )
-
-    if signed_filter == "Signed":
-        ready_df = ready_df[ready_df['Application Signed?'] == 'Signed']
-    elif signed_filter == "Unsigned":
-        ready_df = ready_df[ready_df['Application Signed?'] == 'Unsigned']
-
+    # Signature filtering
+    sign_col = next((col for col in ['application_signed', 'signed_by_committee', 'Application Signed?'] 
+                    if col in df.columns), None)
+    
+    if sign_col:
+        signed_filter = st.selectbox(
+            "Filter by Committee Signature:",
+            ["All", "Signed", "Unsigned"]
+        )
+        
+        if signed_filter == "Signed":
+            ready_df = ready_df[ready_df[sign_col] == 'Signed']
+        elif signed_filter == "Unsigned":
+            ready_df = ready_df[ready_df[sign_col] != 'Signed']
+    
     st.markdown(f"### Showing {len(ready_df)} applications ready for review")
-
-    columns_to_show = ['Date', 'Type of Assistance', 'Amount', 'Gender', 'DOB', 'Request Status', 'Application Signed?']
-    # Make sure all columns exist
-    columns_to_show = [col for col in columns_to_show if col in df.columns]
-    st.dataframe(ready_df[columns_to_show].sort_values(by='Date', ascending=False), use_container_width=True)
-
+    
+    # Display available columns
+    cols_to_show = [col for col in ['Date', 'descriptions', 'Type of Assistance', 
+                                   'Amount', status_col, sign_col] if col in df.columns]
+    st.dataframe(ready_df[cols_to_show].sort_values(
+        by='Date' if 'Date' in df.columns else cols_to_show[0], 
+        ascending=False
+    ), use_container_width=True)
 
 def show_demographics_page():
     st.title("📈 Support Breakdown by Demographics")
-
-    st.markdown("Breakdown of **total and average support amounts** based on various demographics.")
-
-    # Choose demographic category
-    category = st.selectbox(
-        "Select demographic category to analyze:",
-        ["Gender", "Age", "Insurance Type"]
-    )
-
-    # Calculate age from DOB if age is selected
-    if category == "Age":
-        df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
-        current_year = pd.to_datetime('today').year
-        df['Age'] = current_year - df['DOB'].dt.year
-        category = 'Age'  # Now the category will be "Age"
     
-    # Group and summarize
+    # Find available demographic columns
+    demo_cols = [col for col in ['Gender', 'Race', 'Hispanic/Latino', 
+                                'Sexual Orientation', 'Marital Status',
+                                'Insurance Type', 'Household Size',
+                                'Total Household Gross Monthly Income'] 
+                if col in df.columns]
+    
+    if not demo_cols:
+        st.error("No demographic columns found")
+        return
+    
+    category = st.selectbox("Select demographic category:", demo_cols)
+    
+    # Check if we have financial data
+    if 'Amount' not in df.columns:
+        st.warning("No financial data available - showing count distribution only")
+        st.bar_chart(df[category].value_counts())
+        return
+    
+    # Calculate age if DOB available
+    if category == 'Age' and 'DOB' in df.columns:
+        df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
+        df['Age'] = (datetime.now() - df['DOB']).dt.days // 365
+        category = 'Age'
+    
     demo_df = df.dropna(subset=[category, 'Amount'])
-
+    
+    if len(demo_df) == 0:
+        st.warning("No data available for selected category")
+        return
+    
     summary = demo_df.groupby(category).agg(
-        total_support=pd.NamedAgg(column="Amount", aggfunc="sum"),
-        average_support=pd.NamedAgg(column="Amount", aggfunc="mean"),
-        number_of_patients=pd.NamedAgg(column="Amount", aggfunc="count")
+        total_support=('Amount', 'sum'),
+        average_support=('Amount', 'mean'),
+        count=('Amount', 'count')
     ).reset_index()
-
-    # Display chart
-    st.bar_chart(summary.set_index(category)[["total_support", "average_support"]])
-
-    # Show detailed table
-    st.markdown("### 📋 Summary Table")
-    st.dataframe(summary.style.format({"total_support": "${:,.0f}", "average_support": "${:,.0f}"}))
-
+    
+    st.bar_chart(summary.set_index(category)[['total_support', 'average_support']])
+    st.dataframe(summary.style.format({
+        "total_support": "${:,.2f}",
+        "average_support": "${:,.2f}"
+    }))
 
 def show_processing_time_page():
     st.title("⏱️ Request Processing Time")
-
-    st.markdown("""
-        Analyze how long it takes between **request submission** and **support being provided**.
-        This can help identify delays and improve service efficiency.
-    """)
-
-    # Try to calculate processing time (if both dates are available)
-    if 'Payment Submitted?' in df.columns:
-        df['Payment Submitted?'] = pd.to_datetime(df['Payment Submitted?'], errors='coerce')
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-        df['processing_time_days'] = (df['Payment Submitted?'] - df['Date']).dt.days
+    
+    if 'Date' not in df.columns:
+        st.error("No date column found - cannot calculate processing time")
+        return
+    
+    # Try to find completion date column
+    complete_col = next((col for col in ['Payment Submitted?', 'completed_date', 'payment_date'] 
+                        if col in df.columns), None)
+    
+    if not complete_col:
+        st.warning("No completion date column found - using placeholder data")
+        df['processing_days'] = pd.Series([14 + i % 10 for i in range(len(df))])
     else:
-        # Placeholder if no explicit support date exists — simulate for now
-        st.warning("Payment Submitted date not found — estimating processing time using placeholder logic.")
-        df['processing_time_days'] = pd.Series([14 + i % 10 for i in range(len(df))])  # simulated range 14–24 days
-
-    # Drop rows without request dates
-    valid_df = df.dropna(subset=['processing_time_days'])
-
-    # Show summary stats
-    avg_days = valid_df['processing_time_days'].mean()
-    max_days = valid_df['processing_time_days'].max()
-    min_days = valid_df['processing_time_days'].min()
-
-    st.metric("Average Processing Time (days)", f"{avg_days:.1f}")
-    st.metric("Fastest Approval", f"{min_days} days")
-    st.metric("Slowest Approval", f"{max_days} days")
-
-    # Histogram
-    st.markdown("### 📊 Distribution of Processing Times")
-    st.bar_chart(valid_df['processing_time_days'].value_counts().sort_index())
-
-    # Optional: Add time trend over months
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df[complete_col] = pd.to_datetime(df[complete_col], errors='coerce')
+        df['processing_days'] = (df[complete_col] - df['Date']).dt.days
+    
+    valid_df = df.dropna(subset=['processing_days'])
+    
+    if len(valid_df) == 0:
+        st.warning("No valid processing time data available")
+        return
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Average Days", f"{valid_df['processing_days'].mean():.1f}")
+    with col2:
+        st.metric("Fastest", f"{valid_df['processing_days'].min()} days")
+    with col3:
+        st.metric("Slowest", f"{valid_df['processing_days'].max()} days")
+    
+    st.bar_chart(valid_df['processing_days'].value_counts().sort_index())
+    
+    # Monthly trend if date available
     if 'Date' in df.columns:
-        df['month'] = pd.to_datetime(df['Date']).dt.to_period('M')
-        trend = df.groupby('month')['processing_time_days'].mean().reset_index()
+        df['month'] = df['Date'].dt.to_period('M')
+        trend = df.groupby('month')['processing_days'].mean().reset_index()
         trend['month'] = trend['month'].astype(str)
-        st.markdown("### 📈 Average Processing Time by Month")
         st.line_chart(trend.set_index('month'))
-
 
 def show_grant_utilization_page():
     st.title("💸 Grant Utilization Analysis")
     
-    st.markdown("""
-    This page highlights grant utilization information. 
-    Note: Financial data columns not found in current dataset.
-    """)
+    if 'Amount' not in df.columns:
+        st.error("No financial data available for utilization analysis")
+        return
     
-    # Show what data we do have
-    st.warning("Financial columns not available in current data. Showing available information:")
+    # Check for utilization data
+    if 'Amount Utilized' not in df.columns:
+        st.warning("Assuming full utilization (Amount Utilized column not found)")
+        df['Amount Utilized'] = df['Amount']
     
-    # Display the columns we do have
-    if 'descriptions' in df.columns:
-        st.write("Descriptions of assistance:")
-        st.write(df['descriptions'].value_counts())
+    df['Unused Amount'] = df['Amount'] - df['Amount Utilized']
+    df['Fully Utilized'] = df['Unused Amount'] <= 0.01  # Tolerance for rounding
     
-    if 'application_signed' in df.columns:
-        st.write("Application signing status:")
-        st.write(df['application_signed'].value_counts())
+    col1, col2 = st.columns(2)
+    with col1:
+        unused_count = (~df['Fully Utilized']).sum()
+        st.metric("Patients Not Fully Utilizing", f"{unused_count} ({(unused_count/len(df))*100:.1f}%)")
+    with col2:
+        st.metric("Average Unused Amount", f"${df['Unused Amount'].mean():,.2f}")
     
-    if 'status' in df.columns:
-        st.write("Application status overview:")
-        st.write(df['status'].value_counts())
-    
-    st.write("Full available columns:", df.columns.tolist())
-
+    if 'Type of Assistance' in df.columns:
+        by_type = df.groupby('Type of Assistance').agg(
+            avg_grant=('Amount', 'mean'),
+            avg_used=('Amount Utilized', 'mean'),
+            avg_unused=('Unused Amount', 'mean'),
+            count=('Amount', 'count')
+        ).reset_index()
+        
+        st.bar_chart(by_type.set_index('Type of Assistance')[['avg_used', 'avg_unused']])
+        st.dataframe(by_type.style.format({
+            "avg_grant": "${:,.2f}",
+            "avg_used": "${:,.2f}",
+            "avg_unused": "${:,.2f}"
+        }))
 
 def show_impact_summary_page():
     st.title("🌟 Annual Impact Summary")
-
-    st.markdown("A snapshot of impact and outcomes from the past year.")
-
-    # Filter by most recent calendar year
+    
     if 'Date' not in df.columns:
-        st.warning("Missing 'Date' — unable to filter by year.")
+        st.error("No date column available for annual summary")
         return
-
+    
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['year'] = df['Date'].dt.year
-    latest_year = df['year'].dropna().max()
-    current_year_df = df[df['year'] == latest_year]
-
-    # Key metrics
-    total_granted = current_year_df['Amount'].sum()
-    total_patients = current_year_df.shape[0]
-    avg_grant = current_year_df['Amount'].mean()
-
-    st.metric("Total Support Distributed", f"${total_granted:,.0f}")
-    st.metric("Patients Supported", f"{total_patients}")
-    st.metric("Average Grant per Patient", f"${avg_grant:,.0f}")
-
-    # Assistance type breakdown
-    st.markdown("### 🧾 Grants by Assistance Type")
-    assist_summary = current_year_df.groupby('Type of Assistance').agg(
-        total_granted=('Amount', 'sum'),
-        patient_count=('Amount', 'count')
-    ).reset_index()
-
-    st.dataframe(assist_summary.style.format({"total_granted": "${:,.0f}"}))
-
+    latest_year = df['year'].max()
+    yearly_df = df[df['year'] == latest_year]
+    
+    if 'Amount' in df.columns:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Support", f"${yearly_df['Amount'].sum():,.0f}")
+        with col2:
+            st.metric("Patients Supported", len(yearly_df))
+        with col3:
+            st.metric("Average Grant", f"${yearly_df['Amount'].mean():,.0f}")
+    
+    if 'Type of Assistance' in df.columns:
+        st.subheader("Support by Assistance Type")
+        by_type = yearly_df['Type of Assistance'].value_counts()
+        st.bar_chart(by_type)
+    
     # Monthly trend
-    current_year_df['month'] = current_year_df['Date'].dt.strftime('%b')
-    month_order = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    trend = current_year_df.groupby('month')['Amount'].sum().reindex(month_order).fillna(0)
-
-    st.markdown(f"### 📈 Monthly Grant Distribution - {latest_year}")
-    st.bar_chart(trend)
+    if 'Date' in df.columns:
+        yearly_df['month'] = yearly_df['Date'].dt.month_name()
+        monthly = yearly_df.groupby('month').size()
+        st.subheader(f"Monthly Distribution ({latest_year})")
+        st.bar_chart(monthly)
 
 # Sidebar navigation
-page = st.sidebar.selectbox("📊 Select a Page", [
-    "Applications Ready for Review",
-    "Support Breakdown by Demographics",
-    "Request Processing Time",
-    "Grant Utilization Analysis",
-    "Annual Impact Summary"
-])
+pages = {
+    "Applications Ready for Review": show_review_page,
+    "Support Breakdown by Demographics": show_demographics_page,
+    "Request Processing Time": show_processing_time_page,
+    "Grant Utilization Analysis": show_grant_utilization_page,
+    "Annual Impact Summary": show_impact_summary_page
+}
 
-if page == "Applications Ready for Review":
-    show_review_page()
-elif page == "Support Breakdown by Demographics":
-    show_demographics_page()
-elif page == "Request Processing Time":
-    show_processing_time_page()
-elif page == "Grant Utilization Analysis":
-    show_grant_utilization_page()
-elif page == "Annual Impact Summary":
-    show_impact_summary_page()
+page = st.sidebar.selectbox("📊 Select a Page", list(pages.keys()))
+pages[page]()
