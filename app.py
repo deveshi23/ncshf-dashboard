@@ -6,11 +6,19 @@ def load_data():
     return pd.read_csv("data/processed/processed_data.csv")
 
 df = load_data()
+df.columns = df.columns.str.strip()  # Clean any whitespace in column names
+
 
 def show_review_page():
     st.title("📋 Applications Ready for Review")
-
-    ready_df = df[df['Request Status'] == 'Ready for Review']  # Filter for ready for review applications
+    
+    # First check if the column exists
+    if 'Request Status' not in df.columns:
+        st.error(f"'Request Status' column not found. Available columns: {df.columns.tolist()}")
+        return
+    
+    # Filter for ready for review applications
+    ready_df = df[df['Request Status'] == 'Ready for Review']  
 
     signed_filter = st.selectbox(
         "Filter by Committee Signature:",
@@ -25,7 +33,10 @@ def show_review_page():
     st.markdown(f"### Showing {len(ready_df)} applications ready for review")
 
     columns_to_show = ['Date', 'Type of Assistance', 'Amount', 'Gender', 'DOB', 'Request Status', 'Application Signed?']
+    # Make sure all columns exist
+    columns_to_show = [col for col in columns_to_show if col in df.columns]
     st.dataframe(ready_df[columns_to_show].sort_values(by='Date', ascending=False), use_container_width=True)
+
 
 def show_demographics_page():
     st.title("📈 Support Breakdown by Demographics")
