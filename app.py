@@ -85,7 +85,6 @@ def show_demographics_page():
         return
 
     df.columns = df.columns.astype(str).str.strip()
-    st.write("Detected columns:", df.columns.tolist())
     possible_demo_cols = [
         'Gender', 'Sex', 'Race', 'Ethnicity', 'Hispanic/Latino', 'Sexual Orientation',
         'Marital Status', 'Insurance Type', 'Household Size', 'Income', 'Age', 'DOB',
@@ -94,7 +93,6 @@ def show_demographics_page():
     demo_cols = [col for col in df.columns if col.strip().lower() in [p.lower() for p in possible_demo_cols]]
     if not demo_cols:
         st.error("No demographic columns found in data")
-        st.write("Available columns:", df.columns.tolist())
         return
 
     category = st.selectbox("Select demographic category:", demo_cols)
