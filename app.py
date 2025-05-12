@@ -10,14 +10,21 @@ file_path = "UNO Service Learning Data Sheet De-Identified Version.xlsx"
 
 # Check if the file exists and load the data
 @st.cache_data
-def load_data():
-    if os.path.exists(file_path):
+def load_data(file=None):
+    if file is not None:
+        return pd.read_excel(file)
+    elif os.path.exists(file_path):
         return pd.read_excel(file_path)
     else:
         st.error(f"File '{file_path}' not found!")
         return None
 
-df = load_data()
+# Upload file or use default path
+uploaded_file = st.file_uploader("Upload the Excel file", type="xlsx")
+if uploaded_file is not None:
+    df = load_data(uploaded_file)
+else:
+    df = load_data()
 
 # Check if df was successfully loaded
 if df is None:
