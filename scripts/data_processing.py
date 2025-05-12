@@ -1,95 +1,95 @@
-import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
+import os
+from datetime import datetime
 
-st.set_page_config(page_title="Grant Application Dashboard", layout="wide")
+# Get the root directory regardless of where the script is run from
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Load processed data
-df = pd.read_csv("processed_data.csv")
-df.columns = df.columns.str.strip().str.lower()
+RAW_DATA_PATH = os.path.join(ROOT_DIR, 'data', 'raw', 'UNO Service Learning Data Sheet De-Identified Version.xlsx')
+PROCESSED_DATA_PATH = os.path.join(ROOT_DIR, 'data', 'processed', 'processed_data.csv')
 
-# Sidebar for navigation
-page = st.sidebar.selectbox("Select a Page:", [
-    "Application Overview",
-    "Demographics Analysis",
-    "Processing Time Analysis",
-    "Grant Utilization",
-    "Annual Impact Summary"
-])
+# Check directory and file existence
+print("Current Working Directory:", os.getcwd())
+if not os.path.exists(os.path.dirname(RAW_DATA_PATH)):
+    print("The 'data/raw' directory does not exist.")
+else:
+    print("Contents of 'data/raw':", os.listdir(os.path.dirname(RAW_DATA_PATH)))
 
-if page == "Application Overview":
-    st.title("📄 Application Overview")
-    st.write("A snapshot of grant applications.")
+def clean_data():
+    df = pd.read_excel(RAW_DATA_PATH, engine='openpyxl')
 
-    st.write("Available columns in loaded DataFrame:", df.columns.tolist())
+    # --- Standardizing column names ---
+    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('(', '').str.replace(')', '')
 
-    st.dataframe(df.head())
+    # --- Renaming for clarity ---
+    rename_map = {
+        'grant_req_date': 'request_date',
+        'application_signed?': 'application_signed',
+        'request_status': 'status',
+        'total_household_gross_monthly_income': 'monthly_income',
+        'type_of_assistance_class': 'assistance_type',
+        'amount': 'amount_granted',
+        'dob': 'date_of_birth'
+    }
+    df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
-elif page == "Demographics Analysis":
-    st.title("👥 Demographics Analysis")
-    
-    if 'gender' in df.columns and 'race' in df.columns:
-        gender_counts = df['gender'].value_counts().reset_index()
-        gender_counts.columns = ['Gender', 'Count']
+    # --- Dropping completely empty rows ---
+    df.dropna(how='all', inplace=True)
 
-        race_counts = df['race'].value_counts().reset_index()
-        race_counts.columns = ['Race', 'Count']
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Gender Distribution")
-            fig_gender = px.pie(gender_counts, names='Gender', values='Count', hole=0.4)
-            st.plotly_chart(fig_gender)
-
-        with col2:
-            st.subheader("Race Distribution")
-            fig_race = px.pie(race_counts, names='Race', values='Count', hole=0.4)
-            st.plotly_chart(fig_race)
+    # --- Handling key flags ---
+    if 'application_signed' in df.columns:
+        df['application_signed'] = df['application_signed'].fillna('Missing')
     else:
-        st.warning("Gender or race columns not found in dataset.")
+        df['application_signed'] = 'Missing'
 
-elif page == "Processing Time Analysis":
-    st.title("⏱️ Processing Time Analysis")
+    if 'status' in df.columns:
+        df['status'] = df['status'].fillna('Unknown')
+    else:
+        df['status'] = 'Unknown'
 
-    if 'request_date' in df.columns and 'check_mailed_date' in df.columns:
+    # --- Converting dates ---
+    if 'request_date' in df.columns:
         df['request_date'] = pd.to_datetime(df['request_date'], errors='coerce')
-        df['check_mailed_date'] = pd.to_datetime(df['check_mailed_date'], errors='coerce')
-        df['processing_days'] = (df['check_mailed_date'] - df['request_date']).dt.days
+    if 'date_of_birth' in df.columns:
+        df['date_of_birth'] = pd.to_datetime(df['date_of_birth'], errors='coerce')
 
-        st.subheader("Processing Time Distribution")
-        fig_processing = px.histogram(df, x='processing_days', nbins=30, title="Days Between Request and Check Mailed")
-        st.plotly_chart(fig_processing)
-    else:
-        st.warning("Required date columns not found in dataset.")
+    # --- Calculating age ---
+    today = pd.to_datetime('today')
+    if 'date_of_birth' in df.columns:
+        df['age'] = df['date_of_birth'].apply(lambda dob: today.year - dob.year if pd.notnull(dob) else None)
 
-elif page == "Grant Utilization":
-    st.title("💰 Grant Utilization")
+    # --- Cleaning categorical fields ---
+    if 'gender' in df.columns:
+        df['gender'] = df['gender'].str.strip().str.capitalize()
+    if 'insurance_type' in df.columns:
+        df['insurance_type'] = df['insurance_type'].str.strip().str.title()
 
+    # --- Grant usage calculation ---
     if 'amount_granted' in df.columns:
-        st.subheader("Grant Amount Distribution")
-        fig_amount = px.histogram(df, x='amount_granted', nbins=40, title="Distribution of Grant Amounts")
-        st.plotly_chart(fig_amount)
+        df['amount_granted'] = pd.to_numeric(df['amount_granted'], errors='coerce')
+    if 'remaining_balance' in df.columns:
+        df['remaining_balance'] = pd.to_numeric(df['remaining_balance'], errors='coerce')
+        df['amount_used'] = df['amount_granted'] - df['remaining_balance']
+        df['full_grant_used'] = df['remaining_balance'] <= 0
 
-        st.subheader("Total Amount Granted")
-        st.metric("Total Grants", f"${df['amount_granted'].sum():,.2f}")
-    else:
-        st.warning("Amount granted column not found in dataset.")
+    # --- Income bracket classification ---
+    if 'monthly_income' in df.columns:
+        df['income_bracket'] = pd.cut(df['monthly_income'], bins=[0, 2000, 4000, 6000, 10000, 100000],
+                                      labels=['<2k', '2–4k', '4–6k', '6–10k', '10k+'])
 
-elif page == "Annual Impact Summary":
-    st.title("📆 Annual Impact Summary")
+    # --- Review-ready flag ---
+    if 'status' in df.columns:
+        df['ready_for_review'] = (df['status'].str.lower() == 'approved')
 
-    if 'request_date' in df.columns and 'amount_granted' in df.columns:
-        df['year'] = pd.to_datetime(df['request_date'], errors='coerce').dt.year
-        annual_summary = df.groupby('year')['amount_granted'].agg(['count', 'sum']).reset_index()
-        annual_summary.columns = ['Year', 'Applications', 'Total_Granted']
+    # --- Application signed flag normalization ---
+    if 'application_signed' in df.columns:
+        df['signed_by_committee'] = df['application_signed'].str.lower().isin(['yes', 'signed'])
 
-        st.subheader("Yearly Summary")
-        st.dataframe(annual_summary)
+    # --- Save cleaned data ---
+    os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
+    df.to_csv(PROCESSED_DATA_PATH, index=False)
+    print("✅ Data has been cleaned and saved to:", PROCESSED_DATA_PATH)
 
-        st.subheader("Grants Over Time")
-        fig_yearly = px.bar(annual_summary, x='Year', y='Total_Granted', text='Applications', title="Total Grants per Year")
-        st.plotly_chart(fig_yearly)
-    else:
-        st.warning("Required columns for annual summary not found in dataset.")
+# --- Run cleaning if processed file doesn't exist ---
+if not os.path.exists(PROCESSED_DATA_PATH):
+    clean_data()

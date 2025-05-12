@@ -15,7 +15,6 @@ def load_data():
 
 df = load_data()
 
-
 def show_review_page():
     st.title("📋 Applications Ready for Review")
     
@@ -122,8 +121,6 @@ def show_demographics_page():
         }))
     except Exception as e:
         st.error(f"Error generating demographics breakdown: {str(e)}")
-
-
 
 def show_processing_time_page():
     st.title("⏱️ Request Processing Time")
