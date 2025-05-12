@@ -5,6 +5,8 @@ from datetime import datetime
 RAW_DATA_PATH = 'data/raw/UNO Service Learning Data Sheet De-Identified Version.xlsx'
 PROCESSED_DATA_PATH = 'data/processed/processed_data.csv'
 
+print(os.listdir('data/raw'))
+
 def clean_data():
     df = pd.read_excel(RAW_DATA_PATH, engine='openpyxl')
 
