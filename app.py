@@ -6,7 +6,7 @@ from datetime import datetime
 def load_data():
     try:
         df = pd.read_csv("data/processed/processed_data.csv")
-        df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.strip()  # Clean column names
         
         # Debug: Print column names to help diagnose
         print("Columns in data:", df.columns.tolist())
@@ -18,14 +18,9 @@ def load_data():
 
 df = load_data()
 
-# Always show available columns for debugging
-#st.sidebar.markdown("### Data Columns Available")
-#st.sidebar.write(df.columns.tolist())
-
 def show_review_page():
     st.title("📋 Applications Ready for Review")
     
-    # First try to find status columns
     status_cols = ['ready_for_review', 'status', 'Request Status', 'Application Status']
     status_col = next((col for col in status_cols if col in df.columns), None)
     
@@ -34,7 +29,6 @@ def show_review_page():
         st.write("Available columns:", df.columns.tolist())
         return
     
-    # Try to filter ready applications
     try:
         if status_col == 'ready_for_review':
             ready_df = df[df[status_col] == True]
@@ -46,7 +40,6 @@ def show_review_page():
             st.write(f"Unique values in {status_col}:", df[status_col].unique())
             return
             
-        # Signature filtering
         sign_cols = ['application_signed', 'signed_by_committee', 'Application Signed?', 'Signed']
         sign_col = next((col for col in sign_cols if col in df.columns), None)
         
@@ -63,9 +56,8 @@ def show_review_page():
         
         st.markdown(f"### Showing {len(ready_df)} applications ready for review")
         
-        # Display available columns
         cols_to_show = [col for col in ['Date', 'Type of Assistance', 'Amount', 
-                                      'Patient Name', 'Description', status_col, sign_col] 
+                                      'Pt Name', 'Description of Assistance', status_col, sign_col] 
                        if col in df.columns]
         st.dataframe(ready_df[cols_to_show].sort_values(
             by='Date' if 'Date' in df.columns else cols_to_show[0],
@@ -78,7 +70,6 @@ def show_review_page():
 def show_demographics_page():
     st.title("📈 Support Breakdown by Demographics")
     
-    # Find available demographic columns
     demo_cols = [col for col in ['Gender', 'gender', 'Sex', 'Race', 'Ethnicity',
                                'Hispanic/Latino', 'Sexual Orientation', 
                                'Marital Status', 'Insurance Type', 'insurance',
@@ -92,7 +83,6 @@ def show_demographics_page():
     
     category = st.selectbox("Select demographic category:", demo_cols)
     
-    # Handle age calculation if DOB exists
     if category == 'Age' and 'DOB' in df.columns:
         try:
             df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
@@ -102,14 +92,12 @@ def show_demographics_page():
             st.error(f"Couldn't calculate age from DOB: {str(e)}")
             return
     
-    # Show basic counts if no amount data
     if 'Amount' not in df.columns:
         st.warning("No financial data available - showing counts only")
         st.bar_chart(df[category].value_counts())
         st.write("Value counts:", df[category].value_counts())
         return
     
-    # Show financial breakdown if amount exists
     try:
         demo_df = df.dropna(subset=[category, 'Amount'])
         summary = demo_df.groupby(category).agg(
@@ -129,35 +117,68 @@ def show_demographics_page():
 def show_processing_time_page():
     st.title("⏱️ Request Processing Time")
     
-    date_cols = ['Date', 'date', 'Request Date', 'Application Date']
-    date_col = next((col for col in date_cols if col in df.columns), None)
+    # Clean column names again for safety
+    df.columns = df.columns.str.strip()
     
-    if date_col is None:
-        st.error("No request date column found")
-        st.write("Available columns:", df.columns.tolist())
+    # Use the exact column name from your data
+    date_col = 'Date'
+    
+    if date_col not in df.columns:
+        st.error(f"Column '{date_col}' not found. Available columns:")
+        st.write(df.columns.tolist())
         return
     
-    complete_cols = ['Payment Submitted?', 'Completion Date', 'Processed Date', 'payment_date']
-    complete_col = next((col for col in complete_cols if col in df.columns), None)
+    # Check if date column contains valid values
+    try:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        if df[date_col].isnull().all():
+            st.error(f"Column '{date_col}' doesn't contain valid dates")
+            st.write("Sample values:", df[date_col].head())
+            return
+    except Exception as e:
+        st.error(f"Error parsing dates: {str(e)}")
+        return
     
-    if complete_col is None:
-        st.warning("No completion date column found - using placeholder data")
-        df['processing_days'] = pd.Series([7 + i % 14 for i in range(len(df))])  # 7-21 day range
+    # Use your exact completion column name
+    complete_col = 'Payment Submitted?'
+    
+    if complete_col not in df.columns:
+        st.warning(f"No completion date column found ('{complete_col}') - using placeholder data")
+        df['processing_days'] = pd.Series([7 + i % 14 for i in range(len(df))])
     else:
         try:
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
             df[complete_col] = pd.to_datetime(df[complete_col], errors='coerce')
             df['processing_days'] = (df[complete_col] - df[date_col]).dt.days
+            
+            # Filter out negative processing times (data errors)
+            df['processing_days'] = df['processing_days'].apply(lambda x: x if x >= 0 else None)
         except Exception as e:
             st.error(f"Error calculating processing time: {str(e)}")
             return
     
-    valid_df = df.dropna(subset=['processing_days'])
+    # Add date range filter
+    min_date = df[date_col].min()
+    max_date = df[date_col].max()
+    
+    st.subheader("Filter Data")
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Start date", min_date)
+    with col2:
+        end_date = st.date_input("End date", max_date)
+    
+    # Filter data based on date range
+    valid_df = df[
+        (df[date_col] >= pd.to_datetime(start_date)) & 
+        (df[date_col] <= pd.to_datetime(end_date))
+    ].dropna(subset=['processing_days'])
     
     if len(valid_df) == 0:
-        st.warning("No valid processing time data available")
+        st.warning("No valid processing time data available for selected date range")
         return
     
+    # Display metrics
+    st.subheader("Processing Time Metrics")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Average Days", f"{valid_df['processing_days'].mean():.1f}")
@@ -166,17 +187,19 @@ def show_processing_time_page():
     with col3:
         st.metric("Slowest", f"{valid_df['processing_days'].max()} days")
     
+    # Visualizations
+    st.subheader("Processing Time Distribution")
     st.bar_chart(valid_df['processing_days'].value_counts().sort_index())
     
     # Monthly trend
-    if date_col in df.columns:
-        try:
-            df['month'] = df[date_col].dt.to_period('M')
-            trend = df.groupby('month')['processing_days'].mean().reset_index()
-            trend['month'] = trend['month'].astype(str)
-            st.line_chart(trend.set_index('month'))
-        except Exception as e:
-            st.error(f"Couldn't generate monthly trend: {str(e)}")
+    st.subheader("Monthly Trends")
+    try:
+        valid_df['month'] = valid_df[date_col].dt.to_period('M')
+        trend = valid_df.groupby('month')['processing_days'].mean().reset_index()
+        trend['month'] = trend['month'].astype(str)
+        st.line_chart(trend.set_index('month'))
+    except Exception as e:
+        st.error(f"Couldn't generate monthly trend: {str(e)}")
 
 def show_grant_utilization_page():
     st.title("💸 Grant Utilization Analysis")
@@ -187,14 +210,17 @@ def show_grant_utilization_page():
         return
     
     # Check for utilization data
-    util_cols = ['Amount Utilized', 'Utilized Amount', 'amount_used']
+    util_cols = ['Amount Utilized', 'Utilized Amount', 'amount_used', 'Remaining Balance']
     util_col = next((col for col in util_cols if col in df.columns), None)
     
     if util_col is None:
         st.warning("No utilization data found - assuming full utilization")
         df['Amount Utilized'] = df['Amount']
     else:
-        df['Amount Utilized'] = df[util_col]
+        if util_col == 'Remaining Balance':
+            df['Amount Utilized'] = df['Amount'] - df[util_col]
+        else:
+            df['Amount Utilized'] = df[util_col]
     
     df['Unused Amount'] = df['Amount'] - df['Amount Utilized']
     df['Fully Utilized'] = df['Unused Amount'] <= 0.01
@@ -206,7 +232,6 @@ def show_grant_utilization_page():
     with col2:
         st.metric("Average Unused Amount", f"${df['Unused Amount'].mean():,.2f}")
     
-    # Breakdown by type if available
     type_cols = ['Type of Assistance', 'Assistance Type', 'Help Type']
     type_col = next((col for col in type_cols if col in df.columns), None)
     
@@ -228,11 +253,10 @@ def show_grant_utilization_page():
 def show_impact_summary_page():
     st.title("🌟 Annual Impact Summary")
     
-    date_cols = ['Date', 'date', 'Application Date']
-    date_col = next((col for col in date_cols if col in df.columns), None)
+    date_col = 'Date'
     
-    if date_col is None:
-        st.error("No date column available")
+    if date_col not in df.columns:
+        st.error(f"Column '{date_col}' not found")
         st.write("Available columns:", df.columns.tolist())
         return
     
@@ -251,7 +275,6 @@ def show_impact_summary_page():
             with col3:
                 st.metric("Average Grant", f"${yearly_df['Amount'].mean():,.0f}")
         
-        # Assistance type breakdown
         type_cols = ['Type of Assistance', 'Assistance Type']
         type_col = next((col for col in type_cols if col in df.columns), None)
         
@@ -260,7 +283,6 @@ def show_impact_summary_page():
             by_type = yearly_df[type_col].value_counts()
             st.bar_chart(by_type)
         
-        # Monthly trend
         yearly_df['month'] = yearly_df[date_col].dt.month_name()
         month_order = ['January', 'February', 'March', 'April', 'May', 'June',
                       'July', 'August', 'September', 'October', 'November', 'December']
