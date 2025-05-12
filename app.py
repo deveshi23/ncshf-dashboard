@@ -1,15 +1,33 @@
-
 import streamlit as st
 import pandas as pd
+import os
 
-# Load data
+# Check current working directory
+st.write("Current working directory:", os.getcwd())
+
+# Define file path
+file_path = "UNO Service Learning Data Sheet De-Identified Version.xlsx"
+
+# Check if the file exists and load the data
 @st.cache_data
 def load_data():
-    return pd.read_excel("UNO Service Learning Data Sheet De-Identified Version.xlsx")
+    if os.path.exists(file_path):
+        return pd.read_excel(file_path)
+    else:
+        st.error(f"File '{file_path}' not found!")
+        return None
 
 df = load_data()
 
+# Check if df was successfully loaded
+if df is None:
+    st.stop()  # Stop execution if file was not found
+
 def show_demographics_page():
+    if df is None:
+        st.error("No data available. Please check if the file is loaded.")
+        return
+
     st.title("📈 Support Breakdown by Demographics")
     demo_cols = ['Gender', 'Race', 'Ethnicity', 'Marital Status', 'Insurance Type', 'Household Size', 'Income']
     demo_cols = [col for col in demo_cols if col in df.columns]
@@ -34,6 +52,10 @@ def show_demographics_page():
     }))
 
 def show_processing_time_page():
+    if df is None:
+        st.error("No data available. Please check if the file is loaded.")
+        return
+
     st.title("⏱️ Request Processing Time")
     if 'Date Application Received' not in df.columns or 'Date Check Sent' not in df.columns:
         st.error("Required date columns not found.")
@@ -62,6 +84,10 @@ def show_processing_time_page():
         st.error(f"Couldn't generate monthly trend: {str(e)}")
 
 def show_grant_utilization_page():
+    if df is None:
+        st.error("No data available. Please check if the file is loaded.")
+        return
+
     st.title("💸 Grant Utilization Analysis")
     if 'Amount Approved' not in df.columns:
         st.error("No financial data available.")
@@ -90,6 +116,10 @@ def show_grant_utilization_page():
         }))
 
 def show_impact_summary_page():
+    if df is None:
+        st.error("No data available. Please check if the file is loaded.")
+        return
+
     st.title("🌟 Annual Impact Summary")
     if 'Date Application Received' not in df.columns:
         st.error("No date column available.")
