@@ -1,3 +1,5 @@
+
+'''
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -312,3 +314,57 @@ pages = {
 
 page = st.sidebar.selectbox("📊 Select a Page", list(pages.keys()))
 pages[page]()
+
+'''
+
+import streamlit as st
+import pandas as pd
+
+@st.cache_data
+def load_data():
+    try:
+        # Skip first few rows if they are metadata (adjust `skiprows` as needed)
+        df = pd.read_csv("data/processed/processed_data.csv", skiprows=1)
+        
+        # Clean column names
+        df.columns = df.columns.str.strip()  # Strip spaces
+        
+        # Convert string "FALSE" and "TRUE" to actual boolean values
+        boolean_columns = ['ready_for_review', 'status', 'signed_by_committee']  # Add more if needed
+        for col in boolean_columns:
+            if col in df.columns:
+                df[col] = df[col].str.upper().map({"TRUE": True, "FALSE": False})
+        
+        # Check and display first few rows
+        st.write("Data loaded successfully!")
+        st.write("First few rows of the data:", df.head())
+        
+        return df
+    
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        return pd.DataFrame()
+
+df = load_data()
+
+def show_demo_page():
+    st.title("📊 Data Preview and Debugging")
+
+    # Show column names and types
+    st.write("Column Names and Types:", df.dtypes)
+
+    # Verify if a specific column exists and check its first few values
+    if 'Date' in df.columns:
+        st.write("First few Date values:", df['Date'].head())
+
+    if 'Amount' in df.columns:
+        st.write("First few Amount values:", df['Amount'].head())
+    else:
+        st.warning("No 'Amount' column found!")
+
+    # Try a simple plot
+    if 'Amount' in df.columns:
+        st.bar_chart(df['Amount'].value_counts())
+    else:
+        st.warning("No 'Amount' column to chart!")
+
