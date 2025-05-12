@@ -125,38 +125,50 @@ def show_grant_utilization_page():
     """)
 
     # Check if required columns exist
-    if 'Amount Utilized' not in df.columns:
-        st.warning("Column 'Amount Utilized' not found — simulating usage based on granted amount.")
-        df['Amount Utilized'] = df['Amount'] * (0.6 + (df.index % 5) * 0.1)  # simulated values: 60%-100%
+    if 'Amount' not in df.columns:
+        st.error("Critical error: 'Amount' column not found in data. Available columns: " + ", ".join(df.columns))
+        return
 
-    # Calculate unused amount
-    df['unused_amount'] = df['Amount'] - df['Amount Utilized']
+    if 'Amount Utilized' not in df.columns:
+        st.warning("Column 'Amount Utilized' not found - using Amount as utilized amount")
+        df['Amount Utilized'] = df['Amount']  # Assume full utilization if column missing
+        df['unused_amount'] = 0  # No unused amount
+    else:
+        # Calculate unused amount
+        df['unused_amount'] = df['Amount'] - df['Amount Utilized']
+    
     df['fully_utilized'] = df['unused_amount'] <= 1e-2  # small margin for rounding
 
     # Summary stats
     total_apps = len(df)
     unused_apps = (df['fully_utilized'] == False).sum()
-    percent_unused = unused_apps / total_apps * 100
+    percent_unused = unused_apps / total_apps * 100 if total_apps > 0 else 0
 
-    st.metric("Patients NOT Fully Utilizing Grants", f"{unused_apps} ({percent_unused:.1f}%)")
-    st.metric("Average Unused Amount", f"${df['unused_amount'].mean():,.2f}")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Patients NOT Fully Utilizing Grants", f"{unused_apps} ({percent_unused:.1f}%)")
+    with col2:
+        st.metric("Average Unused Amount", f"${df['unused_amount'].mean():,.2f}" if 'unused_amount' in df.columns else "$0.00")
 
-    # Average usage by assistance type
-    usage_by_type = df.groupby('Type of Assistance').agg(
-        avg_granted=('Amount', 'mean'),
-        avg_utilized=('Amount Utilized', 'mean'),
-        avg_unused=('unused_amount', 'mean'),
-        applications=('Amount', 'count')
-    ).reset_index()
+    # Average usage by assistance type (only if Type of Assistance exists)
+    if 'Type of Assistance' in df.columns:
+        usage_by_type = df.groupby('Type of Assistance').agg(
+            avg_granted=('Amount', 'mean'),
+            avg_utilized=('Amount Utilized', 'mean'),
+            avg_unused=('unused_amount', 'mean'),
+            applications=('Amount', 'count')
+        ).reset_index()
 
-    st.markdown("### 📊 Average Usage by Assistance Type")
-    st.dataframe(usage_by_type.style.format({
-        "avg_granted": "${:,.2f}",
-        "avg_utilized": "${:,.2f}",
-        "avg_unused": "${:,.2f}"
-    }))
+        st.markdown("### 📊 Average Usage by Assistance Type")
+        st.dataframe(usage_by_type.style.format({
+            "avg_granted": "${:,.2f}",
+            "avg_utilized": "${:,.2f}",
+            "avg_unused": "${:,.2f}"
+        }))
 
-    st.bar_chart(usage_by_type.set_index('Type of Assistance')[['avg_utilized', 'avg_unused']])
+        st.bar_chart(usage_by_type.set_index('Type of Assistance')[['avg_utilized', 'avg_unused']])
+    else:
+        st.warning("'Type of Assistance' column not found - cannot show breakdown by type")
 
 
 def show_impact_summary_page():
