@@ -114,7 +114,7 @@ if "appended_rows" not in st.session_state:
     st.session_state.appended_rows = []
 
 if "page" not in st.session_state:
-    st.session_state.page = "Landing Page"
+    st.session_state.page = "Home Page"
 
 df_original = load_data()
 
