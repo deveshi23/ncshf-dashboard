@@ -82,8 +82,8 @@ with col1:
     if os.path.exists("logo.png"):
         st.image("logo.png", width=80, caption="NCSHF Logo", output_format="PNG")
 with col2:
-    st.markdown("<h1 style='margin-bottom:0;'> 🚀 Welcome to the NCSHF Service Learning Dashboard!", unsafe_allow_html=True)
-    st.caption("<h1 style='margin-bottom:0;'>Empowering community health through data-driven insights", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin-bottom:0;'> 🚀 Welcome to the NCS Hope Foundation Dashboard!", unsafe_allow_html=True)
+    st.caption("<h1 style='margin-bottom:0;'>Improving community health through the power of data-driven insights.", unsafe_allow_html=True)
 
 st.markdown("---")
 
