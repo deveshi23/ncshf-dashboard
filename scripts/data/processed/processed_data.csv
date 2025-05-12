@@ -1,0 +1,34 @@
+column_headers,descriptions,application_signed,status,ready_for_review,signed_by_committee
+Date,Request Date,Missing,Unknown,False,False
+Pt Name,"Last, First",Missing,Unknown,False,False
+Anonymous ID,6 digit anonymous number system,Missing,Unknown,False,False
+App Year,"Pt in first, second or third year of assistance, based on month/date of first request",Missing,Unknown,False,False
+Remaining Balance,"Remaining grant balance based on App Year ($1,500 max yr 1, $1,000 max yr 2, $500 max yr 3)",Missing,Unknown,False,False
+Request Status,"Approved, Pending, Denied",Missing,Unknown,False,False
+Payment Submitted?,"Date payment mailed (checks, cc payments, or gift cards mailed)",Missing,Unknown,False,False
+Reason - Pending/No,"If Request Status is Pending - reason. If reason is present, application not ready for review until resolved",Missing,Unknown,False,False
+Pt Address 1,Street Address,Missing,Unknown,False,False
+Pt City,City,Missing,Unknown,False,False
+Pt State,State,Missing,Unknown,False,False
+Pt Zip,Zip,Missing,Unknown,False,False
+Language,"Patient's preferred language (English, Spanish, or Other)",Missing,Unknown,False,False
+DOB,Pt's date of birth (earlier applications may only have birth year),Missing,Unknown,False,False
+Marital Status,"Single, Married, Divorced, Widowed, Separated, Domestic Partnership",Missing,Unknown,False,False
+Gender,"Male, Female, Transgender Male, Transgender Female, Non-Binary, Another Gender Identity, Decline to Answer",Missing,Unknown,False,False
+Race,"American Indian or Alaskan Native, Asian, Black or African American, Native Hawaiian or Other Pacific Islander, White, Other, Two or more races, Decline to answer",Missing,Unknown,False,False
+Hispanic/Latino,"Yes, No, Decline to Answer",Missing,Unknown,False,False
+Sexual Orientation,"Straight, Gay or lesbian, Bisexual, Something else, I don't know, Decline to answer,",Missing,Unknown,False,False
+Insurance Type,"Medicaid, Medicare, Medicare & Medicaid, Medicare & Other, Medicare & Private, Military Program, Private, Uninsured, Unknown, Decline to Answer",Missing,Unknown,False,False
+Household Size,Number of household members - used to determine income eligibility,Missing,Unknown,False,False
+Total Household Gross Monthly Income,Dollar amount,Missing,Unknown,False,False
+Distance rountrip/Tx,Distance travelled roundtrip to treatment - used to determine gas card allocations,Missing,Unknown,False,False
+Referral Source,"Practice, Facility, Clinic, or Cancer Center name",Missing,Unknown,False,False
+Referred By,"Social worker, patient advocate, or nurse navigator filling out application",Missing,Unknown,False,False
+Description of Assistance,Text description of patient need for assistance,Missing,Unknown,False,False
+Type of Assistance,"Car Payment, Food/Groceries, Gas,Housing, Medical Supplies/Prescription Co-pay(s), Multiple, Other, Phone/Internet, Utilities",Missing,Unknown,False,False
+Amount,Grant amount for type of assistance,Missing,Unknown,False,False
+"Payment: CC, CK, or GC","Paid via check, credit card, or gift card (only applied to Walmart, HyVee, or Caseys gift cards)",Missing,Unknown,False,False
+Payable to (Vendor),"Where payment goes to, i.e., mortgage lender, landlord, utilities company, etc",Missing,Unknown,False,False
+Patient Letter Notified? (Directly/Indirectly through rep),"Y/N, Tracking if we've notified patient or patient advocate of grant award",Missing,Unknown,False,False
+Application Signed?,"Y/N, tracking if we've had grant review committee approvers sign document for accounting purposes",Missing,Unknown,False,False
+Notes,Patient application notes,Missing,Unknown,False,False

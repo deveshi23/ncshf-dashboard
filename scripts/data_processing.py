@@ -2,13 +2,26 @@ import pandas as pd
 import os
 from datetime import datetime
 
-RAW_DATA_PATH = 'data/raw/UNO Service Learning Data Sheet De-Identified Version.xlsx'
+# Use an absolute or relative path to ensure the correct folder structure
+RAW_DATA_PATH = '../data/raw/UNO Service Learning Data Sheet De-Identified Version.xlsx'
 PROCESSED_DATA_PATH = 'data/processed/processed_data.csv'
 
-print(os.listdir('data/raw'))
+# Check the current working directory to ensure you're in the right place
+print("Current Working Directory:", os.getcwd())
+
+# List the files in the data/raw directory for debugging
+try:
+    print("Files in 'data/raw':", os.listdir(os.path.abspath('data/raw')))
+except FileNotFoundError:
+    print("The 'data/raw' directory does not exist.")
 
 def clean_data():
-    df = pd.read_excel(RAW_DATA_PATH, engine='openpyxl')
+    # Try to read the Excel file
+    try:
+        df = pd.read_excel(RAW_DATA_PATH, engine='openpyxl')
+    except FileNotFoundError:
+        print(f"File not found: {RAW_DATA_PATH}")
+        return
 
     # --- Standardizing column names ---
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('(', '').str.replace(')', '')
@@ -25,7 +38,7 @@ def clean_data():
     }
     df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
-    # --- Droping completely empty rows ---
+    # --- Dropping completely empty rows ---
     df.dropna(how='all', inplace=True)
 
     # --- Filling in missing data in key flags ---
