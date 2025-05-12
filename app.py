@@ -486,7 +486,7 @@ def show_impact_summary_page():
 
 # --- Navigation ---
 pages = {
-    "Landing Page": landing_page,
+    "Main Page": landing_page,
     "Upload Your Data": handle_file_upload,
     "Add New Row": handle_append_row,
     "Applications Ready for Review": show_review_page,
