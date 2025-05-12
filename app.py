@@ -7,16 +7,14 @@ def load_data():
     try:
         df = pd.read_csv("data/processed/processed_data.csv")
         df.columns = df.columns.str.strip()  # Clean column names
-        
-        # Debug: Print column names to help diagnose
-        print("Columns in data:", df.columns.tolist())
-        
         return df
+    
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return pd.DataFrame()
 
 df = load_data()
+
 
 def show_review_page():
     st.title("📋 Applications Ready for Review")
@@ -69,21 +67,32 @@ def show_review_page():
 
 def show_demographics_page():
     st.title("📈 Support Breakdown by Demographics")
-    
-    demo_cols = [col for col in ['Gender', 'gender', 'Sex', 'Race', 'Ethnicity',
-                               'Hispanic/Latino', 'Sexual Orientation', 
-                               'Marital Status', 'Insurance Type', 'insurance',
-                               'Household Size', 'Income', 'Age', 'DOB']
-                if col in df.columns]
-    
+
+    # Clean column names
+    df.columns = df.columns.str.strip()
+
+    # Optional: Show current column names in Streamlit for debugging
+    st.write("Detected columns:", df.columns.tolist())
+
+    # Define possible demographic column names (case-insensitive)
+    possible_demo_cols = [
+        'Gender', 'Sex', 'Race', 'Ethnicity', 'Hispanic/Latino', 'Sexual Orientation',
+        'Marital Status', 'Insurance Type', 'Household Size', 'Income', 'Age', 'DOB',
+        'Total Household Gross Monthly Income'
+    ]
+
+    # Match columns using lowercase comparison
+    demo_cols = [col for col in df.columns if col.strip().lower() in
+                 [p.lower() for p in possible_demo_cols]]
+
     if not demo_cols:
         st.error("No demographic columns found in data")
         st.write("Available columns:", df.columns.tolist())
         return
-    
+
     category = st.selectbox("Select demographic category:", demo_cols)
-    
-    if category == 'Age' and 'DOB' in df.columns:
+
+    if category.lower() == 'age' and 'DOB' in df.columns:
         try:
             df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
             df['Age'] = (pd.to_datetime('today') - df['DOB']).dt.days // 365
@@ -91,13 +100,13 @@ def show_demographics_page():
         except Exception as e:
             st.error(f"Couldn't calculate age from DOB: {str(e)}")
             return
-    
+
     if 'Amount' not in df.columns:
         st.warning("No financial data available - showing counts only")
         st.bar_chart(df[category].value_counts())
         st.write("Value counts:", df[category].value_counts())
         return
-    
+
     try:
         demo_df = df.dropna(subset=[category, 'Amount'])
         summary = demo_df.groupby(category).agg(
@@ -105,7 +114,7 @@ def show_demographics_page():
             average_support=('Amount', 'mean'),
             count=('Amount', 'count')
         ).reset_index()
-        
+
         st.bar_chart(summary.set_index(category)[['total_support', 'average_support']])
         st.dataframe(summary.style.format({
             "total_support": "${:,.2f}",
@@ -113,6 +122,8 @@ def show_demographics_page():
         }))
     except Exception as e:
         st.error(f"Error generating demographics breakdown: {str(e)}")
+
+
 
 def show_processing_time_page():
     st.title("⏱️ Request Processing Time")
