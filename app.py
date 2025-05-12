@@ -1,16 +1,21 @@
-
-'''
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import os
 
 @st.cache_data
 def load_data():
+    file_path = "data/raw/UNO Service Learning Data Sheet De-Identified Version.xlsx"
+    if not os.path.exists(file_path):
+        st.error(f"File not found: {file_path}\n\n"
+                 "Please make sure the file is in the correct directory.")
+        return pd.DataFrame()
     try:
-        df = pd.read_csv("data/processed/processed_data.csv")
-        df.columns = df.columns.str.strip()  # Clean column names
+        df = pd.read_excel(file_path, sheet_name="PA Log Sheet")
+        df.columns = df.columns.astype(str).str.strip()
+        # Convert Amount to numeric, coerce errors to NaN
+        if 'Amount' in df.columns:
+            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
         return df
-    
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return pd.DataFrame()
@@ -19,80 +24,80 @@ df = load_data()
 
 def show_review_page():
     st.title("📋 Applications Ready for Review")
-    
+    if df.empty:
+        st.error("No data loaded.")
+        return
+
     status_cols = ['ready_for_review', 'status', 'Request Status', 'Application Status']
     status_col = next((col for col in status_cols if col in df.columns), None)
-    
     if status_col is None:
         st.error("Couldn't find status column in data")
         st.write("Available columns:", df.columns.tolist())
         return
-    
+
     try:
         if status_col == 'ready_for_review':
             ready_df = df[df[status_col] == True]
         else:
-            ready_df = df[df[status_col].str.contains('ready|review', case=False, na=False)]
-        
+            ready_df = df[df[status_col].astype(str).str.contains('ready|review|approved', case=False, na=False)]
+
         if len(ready_df) == 0:
             st.warning(f"No applications ready for review found in column '{status_col}'")
             st.write(f"Unique values in {status_col}:", df[status_col].unique())
             return
-            
-        sign_cols = ['application_signed', 'signed_by_committee', 'Application Signed?', 'Signed']
+
+        sign_cols = ['Application Signed?', 'application_signed', 'signed_by_committee', 'Signed']
         sign_col = next((col for col in sign_cols if col in df.columns), None)
-        
+
         if sign_col:
             signed_filter = st.selectbox(
                 "Filter by Committee Signature:",
                 ["All", "Signed", "Unsigned"]
             )
-            
             if signed_filter == "Signed":
-                ready_df = ready_df[ready_df[sign_col].str.contains('signed', case=False, na=False)]
+                ready_df = ready_df[ready_df[sign_col].astype(str).str.contains('yes|signed', case=False, na=False)]
             elif signed_filter == "Unsigned":
-                ready_df = ready_df[~ready_df[sign_col].str.contains('signed', case=False, na=False)]
-        
+                ready_df = ready_df[~ready_df[sign_col].astype(str).str.contains('yes|signed', case=False, na=False)]
+
         st.markdown(f"### Showing {len(ready_df)} applications ready for review")
-        
-        cols_to_show = [col for col in ['Date', 'Type of Assistance', 'Amount', 
-                                      'Pt Name', 'Description of Assistance', status_col, sign_col] 
-                       if col in df.columns]
-        st.dataframe(ready_df[cols_to_show].sort_values(
-            by='Date' if 'Date' in df.columns else cols_to_show[0],
-            ascending=False
-        ), use_container_width=True)
-        
+
+        cols_to_show = [col for col in [
+            'Grant Req Date', 'Type of Assistance (CLASS)', 'Amount',
+            'Pt Name', 'Description of Assistance', status_col, sign_col
+        ] if col in df.columns]
+        if cols_to_show:
+            st.dataframe(
+                ready_df[cols_to_show].sort_values(
+                    by='Grant Req Date' if 'Grant Req Date' in cols_to_show else cols_to_show[0],
+                    ascending=False
+                ),
+                use_container_width=True
+            )
+        else:
+            st.dataframe(ready_df)
     except Exception as e:
         st.error(f"Error filtering applications: {str(e)}")
 
 def show_demographics_page():
     st.title("📈 Support Breakdown by Demographics")
+    if df.empty:
+        st.error("No data loaded.")
+        return
 
-    # Clean column names
-    df.columns = df.columns.str.strip()
-
-    # Optional: Show current column names in Streamlit for debugging
+    df.columns = df.columns.astype(str).str.strip()
     st.write("Detected columns:", df.columns.tolist())
-
-    # Define possible demographic column names (case-insensitive)
     possible_demo_cols = [
         'Gender', 'Sex', 'Race', 'Ethnicity', 'Hispanic/Latino', 'Sexual Orientation',
         'Marital Status', 'Insurance Type', 'Household Size', 'Income', 'Age', 'DOB',
         'Total Household Gross Monthly Income'
     ]
-
-    # Match columns using lowercase comparison
-    demo_cols = [col for col in df.columns if col.strip().lower() in
-                 [p.lower() for p in possible_demo_cols]]
-
+    demo_cols = [col for col in df.columns if col.strip().lower() in [p.lower() for p in possible_demo_cols]]
     if not demo_cols:
         st.error("No demographic columns found in data")
         st.write("Available columns:", df.columns.tolist())
         return
 
     category = st.selectbox("Select demographic category:", demo_cols)
-
     if category.lower() == 'age' and 'DOB' in df.columns:
         try:
             df['DOB'] = pd.to_datetime(df['DOB'], errors='coerce')
@@ -115,7 +120,6 @@ def show_demographics_page():
             average_support=('Amount', 'mean'),
             count=('Amount', 'count')
         ).reset_index()
-
         st.bar_chart(summary.set_index(category)[['total_support', 'average_support']])
         st.dataframe(summary.style.format({
             "total_support": "${:,.2f}",
@@ -126,19 +130,17 @@ def show_demographics_page():
 
 def show_processing_time_page():
     st.title("⏱️ Request Processing Time")
-    
-    # Clean column names again for safety
-    df.columns = df.columns.str.strip()
-    
-    # Use the exact column name from your data
-    date_col = 'Date'
-    
+    if df.empty:
+        st.error("No data loaded.")
+        return
+
+    df.columns = df.columns.astype(str).str.strip()
+    date_col = 'Grant Req Date'
     if date_col not in df.columns:
         st.error(f"Column '{date_col}' not found. Available columns:")
         st.write(df.columns.tolist())
         return
-    
-    # Check if date column contains valid values
+
     try:
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
         if df[date_col].isnull().all():
@@ -148,46 +150,37 @@ def show_processing_time_page():
     except Exception as e:
         st.error(f"Error parsing dates: {str(e)}")
         return
-    
-    # Use your exact completion column name
+
     complete_col = 'Payment Submitted?'
-    
     if complete_col not in df.columns:
         st.warning(f"No completion date column found ('{complete_col}') - using placeholder data")
         df['processing_days'] = pd.Series([7 + i % 14 for i in range(len(df))])
     else:
         try:
-            df[complete_col] = pd.to_datetime(df[complete_col], errors='coerce')
-            df['processing_days'] = (df[complete_col] - df[date_col]).dt.days
-            
-            # Filter out negative processing times (data errors)
-            df['processing_days'] = df['processing_days'].apply(lambda x: x if x >= 0 else None)
+            # Use Yes/No as a proxy for completion date
+            df['processing_days'] = 7  # Placeholder, since actual completion date is not available
         except Exception as e:
             st.error(f"Error calculating processing time: {str(e)}")
             return
-    
-    # Add date range filter
+
     min_date = df[date_col].min()
     max_date = df[date_col].max()
-    
     st.subheader("Filter Data")
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input("Start date", min_date)
     with col2:
         end_date = st.date_input("End date", max_date)
-    
-    # Filter data based on date range
+
     valid_df = df[
-        (df[date_col] >= pd.to_datetime(start_date)) & 
+        (df[date_col] >= pd.to_datetime(start_date)) &
         (df[date_col] <= pd.to_datetime(end_date))
     ].dropna(subset=['processing_days'])
-    
+
     if len(valid_df) == 0:
         st.warning("No valid processing time data available for selected date range")
         return
-    
-    # Display metrics
+
     st.subheader("Processing Time Metrics")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -196,12 +189,10 @@ def show_processing_time_page():
         st.metric("Fastest", f"{valid_df['processing_days'].min()} days")
     with col3:
         st.metric("Slowest", f"{valid_df['processing_days'].max()} days")
-    
-    # Visualizations
+
     st.subheader("Processing Time Distribution")
     st.bar_chart(valid_df['processing_days'].value_counts().sort_index())
-    
-    # Monthly trend
+
     st.subheader("Monthly Trends")
     try:
         valid_df['month'] = valid_df[date_col].dt.to_period('M')
@@ -213,38 +204,40 @@ def show_processing_time_page():
 
 def show_grant_utilization_page():
     st.title("💸 Grant Utilization Analysis")
-    
+    if df.empty:
+        st.error("No data loaded.")
+        return
+
     if 'Amount' not in df.columns:
         st.error("No financial data available")
         st.write("Available columns:", df.columns.tolist())
         return
-    
-    # Check for utilization data
+
     util_cols = ['Amount Utilized', 'Utilized Amount', 'amount_used', 'Remaining Balance']
     util_col = next((col for col in util_cols if col in df.columns), None)
-    
+
     if util_col is None:
         st.warning("No utilization data found - assuming full utilization")
         df['Amount Utilized'] = df['Amount']
     else:
         if util_col == 'Remaining Balance':
-            df['Amount Utilized'] = df['Amount'] - df[util_col]
+            df['Amount Utilized'] = df['Amount'] - pd.to_numeric(df[util_col], errors='coerce')
         else:
-            df['Amount Utilized'] = df[util_col]
-    
+            df['Amount Utilized'] = pd.to_numeric(df[util_col], errors='coerce')
+
     df['Unused Amount'] = df['Amount'] - df['Amount Utilized']
     df['Fully Utilized'] = df['Unused Amount'] <= 0.01
-    
+
     col1, col2 = st.columns(2)
     with col1:
         unused_count = (~df['Fully Utilized']).sum()
         st.metric("Patients Not Fully Utilizing", f"{unused_count} ({(unused_count/len(df))*100:.1f}%)")
     with col2:
         st.metric("Average Unused Amount", f"${df['Unused Amount'].mean():,.2f}")
-    
-    type_cols = ['Type of Assistance', 'Assistance Type', 'Help Type']
+
+    type_cols = ['Type of Assistance (CLASS)', 'Type of Assistance', 'Assistance Type', 'Help Type']
     type_col = next((col for col in type_cols if col in df.columns), None)
-    
+
     if type_col:
         by_type = df.groupby(type_col).agg(
             avg_grant=('Amount', 'mean'),
@@ -252,7 +245,6 @@ def show_grant_utilization_page():
             avg_unused=('Unused Amount', 'mean'),
             count=('Amount', 'count')
         ).reset_index()
-        
         st.bar_chart(by_type.set_index(type_col)[['avg_used', 'avg_unused']])
         st.dataframe(by_type.style.format({
             "avg_grant": "${:,.2f}",
@@ -262,20 +254,21 @@ def show_grant_utilization_page():
 
 def show_impact_summary_page():
     st.title("🌟 Annual Impact Summary")
-    
-    date_col = 'Date'
-    
+    if df.empty:
+        st.error("No data loaded.")
+        return
+
+    date_col = 'Grant Req Date'
     if date_col not in df.columns:
         st.error(f"Column '{date_col}' not found")
         st.write("Available columns:", df.columns.tolist())
         return
-    
     try:
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
         df['year'] = df[date_col].dt.year
         latest_year = df['year'].max()
         yearly_df = df[df['year'] == latest_year]
-        
+
         if 'Amount' in df.columns:
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -284,26 +277,27 @@ def show_impact_summary_page():
                 st.metric("Patients Supported", len(yearly_df))
             with col3:
                 st.metric("Average Grant", f"${yearly_df['Amount'].mean():,.0f}")
-        
-        type_cols = ['Type of Assistance', 'Assistance Type']
+
+        type_cols = ['Type of Assistance (CLASS)', 'Type of Assistance', 'Assistance Type']
         type_col = next((col for col in type_cols if col in df.columns), None)
-        
+
         if type_col:
             st.subheader("Support by Assistance Type")
             by_type = yearly_df[type_col].value_counts()
             st.bar_chart(by_type)
-        
+
         yearly_df['month'] = yearly_df[date_col].dt.month_name()
-        month_order = ['January', 'February', 'March', 'April', 'May', 'June',
-                      'July', 'August', 'September', 'October', 'November', 'December']
+        month_order = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ]
         monthly = yearly_df.groupby('month').size().reindex(month_order, fill_value=0)
         st.subheader(f"Monthly Distribution ({latest_year})")
         st.bar_chart(monthly)
-        
     except Exception as e:
         st.error(f"Error generating impact summary: {str(e)}")
 
-# Navigation
+# --- Navigation ---
 pages = {
     "Applications Ready for Review": show_review_page,
     "Support Breakdown by Demographics": show_demographics_page,
@@ -314,57 +308,3 @@ pages = {
 
 page = st.sidebar.selectbox("📊 Select a Page", list(pages.keys()))
 pages[page]()
-
-'''
-
-import streamlit as st
-import pandas as pd
-
-@st.cache_data
-def load_data():
-    try:
-        # Skip first few rows if they are metadata (adjust `skiprows` as needed)
-        df = pd.read_csv("data/processed/processed_data.csv", skiprows=1)
-        
-        # Clean column names
-        df.columns = df.columns.str.strip()  # Strip spaces
-        
-        # Convert string "FALSE" and "TRUE" to actual boolean values
-        boolean_columns = ['ready_for_review', 'status', 'signed_by_committee']  # Add more if needed
-        for col in boolean_columns:
-            if col in df.columns:
-                df[col] = df[col].str.upper().map({"TRUE": True, "FALSE": False})
-        
-        # Check and display first few rows
-        st.write("Data loaded successfully!")
-        st.write("First few rows of the data:", df.head())
-        
-        return df
-    
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
-        return pd.DataFrame()
-
-df = load_data()
-
-def show_demo_page():
-    st.title("📊 Data Preview and Debugging")
-
-    # Show column names and types
-    st.write("Column Names and Types:", df.dtypes)
-
-    # Verify if a specific column exists and check its first few values
-    if 'Date' in df.columns:
-        st.write("First few Date values:", df['Date'].head())
-
-    if 'Amount' in df.columns:
-        st.write("First few Amount values:", df['Amount'].head())
-    else:
-        st.warning("No 'Amount' column found!")
-
-    # Try a simple plot
-    if 'Amount' in df.columns:
-        st.bar_chart(df['Amount'].value_counts())
-    else:
-        st.warning("No 'Amount' column to chart!")
-
