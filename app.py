@@ -3,7 +3,20 @@ import pandas as pd
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("data/processed/processed_data.csv")
+    try:
+        df = pd.read_csv("data/processed/processed_data.csv")
+        df.columns = df.columns.str.strip()
+        
+        # Verify we have required columns
+        expected_columns = ['Amount', 'Type of Assistance', 'Request Status']
+        for col in expected_columns:
+            if col not in df.columns:
+                st.error(f"Required column '{col}' not found in data")
+                
+        return df
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        return pd.DataFrame()  # Return empty dataframe to prevent crashes
 
 df = load_data()
 df.columns = df.columns.str.strip()  # Clean any whitespace in column names
@@ -118,57 +131,29 @@ def show_processing_time_page():
 
 def show_grant_utilization_page():
     st.title("💸 Grant Utilization Analysis")
-
-    st.markdown("""
-    This page highlights how much of their granted funds patients actually used, broken down by assistance type.
-    This informs future budget allocations.
-    """)
-
-    # Check if required columns exist
-    if 'Amount' not in df.columns:
-        st.error("Critical error: 'Amount' column not found in data. Available columns: " + ", ".join(df.columns))
-        return
-
-    if 'Amount Utilized' not in df.columns:
-        st.warning("Column 'Amount Utilized' not found - using Amount as utilized amount")
-        df['Amount Utilized'] = df['Amount']  # Assume full utilization if column missing
-        df['unused_amount'] = 0  # No unused amount
-    else:
-        # Calculate unused amount
-        df['unused_amount'] = df['Amount'] - df['Amount Utilized']
     
-    df['fully_utilized'] = df['unused_amount'] <= 1e-2  # small margin for rounding
-
-    # Summary stats
-    total_apps = len(df)
-    unused_apps = (df['fully_utilized'] == False).sum()
-    percent_unused = unused_apps / total_apps * 100 if total_apps > 0 else 0
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Patients NOT Fully Utilizing Grants", f"{unused_apps} ({percent_unused:.1f}%)")
-    with col2:
-        st.metric("Average Unused Amount", f"${df['unused_amount'].mean():,.2f}" if 'unused_amount' in df.columns else "$0.00")
-
-    # Average usage by assistance type (only if Type of Assistance exists)
-    if 'Type of Assistance' in df.columns:
-        usage_by_type = df.groupby('Type of Assistance').agg(
-            avg_granted=('Amount', 'mean'),
-            avg_utilized=('Amount Utilized', 'mean'),
-            avg_unused=('unused_amount', 'mean'),
-            applications=('Amount', 'count')
-        ).reset_index()
-
-        st.markdown("### 📊 Average Usage by Assistance Type")
-        st.dataframe(usage_by_type.style.format({
-            "avg_granted": "${:,.2f}",
-            "avg_utilized": "${:,.2f}",
-            "avg_unused": "${:,.2f}"
-        }))
-
-        st.bar_chart(usage_by_type.set_index('Type of Assistance')[['avg_utilized', 'avg_unused']])
-    else:
-        st.warning("'Type of Assistance' column not found - cannot show breakdown by type")
+    st.markdown("""
+    This page highlights grant utilization information. 
+    Note: Financial data columns not found in current dataset.
+    """)
+    
+    # Show what data we do have
+    st.warning("Financial columns not available in current data. Showing available information:")
+    
+    # Display the columns we do have
+    if 'descriptions' in df.columns:
+        st.write("Descriptions of assistance:")
+        st.write(df['descriptions'].value_counts())
+    
+    if 'application_signed' in df.columns:
+        st.write("Application signing status:")
+        st.write(df['application_signed'].value_counts())
+    
+    if 'status' in df.columns:
+        st.write("Application status overview:")
+        st.write(df['status'].value_counts())
+    
+    st.write("Full available columns:", df.columns.tolist())
 
 
 def show_impact_summary_page():
